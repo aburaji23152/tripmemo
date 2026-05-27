@@ -245,7 +245,7 @@ function deleteRecord(index) {
 }
 
 function downloadCSV(targetRecords, fileNameKeyword) {
-    let csvContent = '日付,乗車駅,時刻,下車駅,遅延(発),遅延(着),列車番号,メモ\r\n';
+    let csvContent = '日付,乗車駅,時刻,下車駅,遅延(発),遅延(着),編成番号,メモ\r\n';
 
     targetRecords.forEach(record => {
         const row = [
