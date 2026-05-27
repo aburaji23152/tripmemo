@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乗車記録メモ</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="列車メモ">
+    <link rel="apple-touch-icon" href="./icon.png">
+    <link rel="icon" href="./icon.png">
+</head>
+<body>
+
+    <h1>乗車記録メモ</h1>
+
+    <div class="form-container">
+        <h3>新しい記録を追加</h3>
+        <div class="form-grid">
+            <input type="date" id="date" required style="grid-column: span 2;">
+            <input type="text" id="depStation" placeholder="乗車駅名" required>
+            <input type="time" id="time" required>
+            <input type="text" id="arrStation" placeholder="下車駅名" required>
+            <input type="text" id="trainNum" placeholder="列車番号">
+            <input type="number" id="depDelay" placeholder="遅延(発)" min="0" value="0">
+            <input type="number" id="arrDelay" placeholder="遅延(着)" min="0" value="0">
+            <input type="text" id="memo" placeholder="メモ(編成など)" style="grid-column: span 2;">
+        </div>
+        <button id="addBtn">記録を追加</button>
+        
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button id="downloadDateBtn" style="background-color: #e67e22; margin: 0; flex: 1;">🗓️ 選択日のCSV</button>
+            <button id="downloadBtn" style="background-color: #3498db; margin: 0; flex: 1;">📂 全記録のCSV</button>
+        </div>
+
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc;">
+            <label for="uploadFile" class="custom-file-upload">
+                📤 CSVファイルを選択してインポート
+            </label>
+            <input type="file" id="uploadFile" accept=".csv">
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table border="1px" id="recordTable">
+            <thead>
+                <tr>
+                    <th rowspan="2">乗車駅</th>
+                    <th rowspan="2">発時刻</th>
+                    <th rowspan="2">下車駅</th>
+                    <th colspan="2">遅延(分)</th>
+                    <th rowspan="2">列車番号</th>
+                    <th rowspan="2">メモ(編成)</th>
+                    <th rowspan="2" style="width:110px;">操作</th>
+                </tr>
+                <tr>
+                    <th>発</th>
+                    <th>着</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                </tbody>
+        </table>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
