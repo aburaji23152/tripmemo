@@ -1,4 +1,4 @@
-const CACHE_NAME = 'train-memo-v1.0'; // バージョンをアップ
+const CACHE_NAME = 'train-memo-v1.1'; // バージョンをアップ
 const ASSETS = [
     './',
     './index.html',
