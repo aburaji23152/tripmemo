@@ -1,25 +1,77 @@
+/* --- 変数の定義（色の管理を一括化） --- */
+:root {
+    --bg-color: #f4f7f6;
+    --text-color: #333;
+    --container-bg: #fff;
+    --header-color: #2c3e50;
+    --input-border: #ccc;
+    --table-header: #2c3e50;
+    --table-row-even: #f9f9f9;
+    --date-header-bg: #ecf0f1;
+}
+
+/* ダークモード用の配色設定 */
+[data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --container-bg: #2d2d2d;
+    --header-color: #ecf0f1;
+    --input-border: #444;
+    --table-header: #34495e;
+    --table-row-even: #333;
+    --date-header-bg: #3d3d3d;
+}
+
+/* --- 全体レイアウト --- */
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
     font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+    transition: background-color 0.3s, color 0.3s; /* 切り替えを滑らかに */
 }
 
 body {
-    background-color: #f4f7f6;
-    color: #333;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     padding: 15px;
 }
 
-h1 {
-    text-align: center;
-    color: #2c3e50;
-    font-size: 1.5rem;
+/* 右上にボタンを置くためのヘッダー設定 */
+.header-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
     margin-bottom: 20px;
 }
 
+h1 {
+    color: var(--header-color);
+    font-size: 1.5rem;
+    text-align: center;
+}
+
+/* ダークモード切り替えボタン（右上に固定） */
+#themeToggle {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: auto;
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 1.2rem;
+    background: var(--container-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* --- フォーム関連 --- */
 .form-container {
-    background-color: #fff;
+    background-color: var(--container-bg);
     padding: 15px;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -29,7 +81,7 @@ h1 {
 .form-container h3 {
     font-size: 1rem;
     margin-bottom: 10px;
-    color: #34495e;
+    color: var(--header-color);
 }
 
 .form-grid {
@@ -38,23 +90,25 @@ h1 {
     gap: 10px;
 }
 
-.form-grid input {
-    line-height: 24px;
-}
-
-input[type="text"], input[type="time"], input[type="number"] {
+input[type="text"], 
+input[type="time"], 
+input[type="number"], 
+input[type="date"] {
     width: 100%;
     padding: 10px;
     font-size: 16px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--input-border);
     border-radius: 4px;
     outline: none;
+    background-color: var(--container-bg);
+    color: var(--text-color);
 }
 
-input[type="text"]:focus, input[type="time"]:focus, input[type="number"]:focus {
+input:focus {
     border-color: #3498db;
 }
 
+/* --- ボタン類 --- */
 button {
     width: 100%;
     background-color: #2ecc71;
@@ -80,13 +134,10 @@ button:active {
     width: auto;
 }
 
-.delete-btn:active {
-    background-color: #c0392b;
-}
-
+/* --- テーブル関連 --- */
 .table-container {
     overflow-x: auto;
-    background-color: white;
+    background-color: var(--container-bg);
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
@@ -98,41 +149,39 @@ table {
 }
 
 th, td {
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--input-border);
     padding: 10px 1px;
     text-align: center;
     font-size: 0.9rem;
 }
 
 th {
-    background-color: #2c3e50;
+    background-color: var(--table-header);
     color: white;
     font-weight: bold;
 }
 
 tr:nth-child(even) td {
-    background-color: #f9f9f9;
+    background-color: var(--table-row-even);
 }
 
-/* 隠された状態のデータ行を非表示にする */
-.hidden-row {
-    display: none !important;
-}
-
-/* 日付ヘッダー行にホバー/タップ時の視覚フィードバックを追加 */
+/* 日付ヘッダー行 */
 .date-header-row:active td {
     background-color: #bdc3c7 !important;
 }
 
-/* 元のダサいファイル選択ボタンを隠す */
+.hidden-row {
+    display: none !important;
+}
+
+/* --- インポート用カスタムラベル --- */
 input[type="file"] {
     display: none;
 }
 
-/* 代わりのラベルを綺麗目のボタンに変身させる */
 .custom-file-upload {
     display: block;
-    background-color: #555; /* 好みに合わせて緑色に */
+    background-color: #555;
     color: white;
     padding: 10px 15px;
     border-radius: 4px;
@@ -145,7 +194,6 @@ input[type="file"] {
     width: 100%;
 }
 
-/* ボタンを押したとき（スマホでタップしたとき）の反応 */
 .custom-file-upload:active {
     background-color: #27ae60;
 }
