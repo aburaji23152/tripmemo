@@ -2,11 +2,11 @@
 const tableBody = document.getElementById('tableBody');
 let records = JSON.parse(localStorage.getItem('trainRecords')) || [];
 
+// 【反映】折りたたみ状態をlocalStorageから読み込む
+let collapsedDates = JSON.parse(localStorage.getItem('collapsedDates')) || {};
+
 // 編集中の行のインデックス（-1は編集モードなし）
 let editingIndex = -1;
-
-// 各日付の折りたたみ状態を記録するオブジェクト
-let collapsedDates = {};
 
 // 今日のおおよその日付（ローカルタイム）をフォームの初期値にする
 function setTodayDate() {
@@ -58,7 +58,6 @@ function renderTable() {
             const isCollapsed = collapsedDates[record.date] || false;
             const toggleIcon = isCollapsed ? '▶' : '▼';
 
-            // 日付見出し行（削除ボタンのスタイルを行の削除ボタンと統一）
             const dateRow = document.createElement('tr');
             dateRow.className = 'date-header-row';
             dateRow.setAttribute('data-date', record.date);
@@ -79,18 +78,12 @@ function renderTable() {
             tr.classList.add('hidden-row');
         }
 
-        // --- 遅延データの数値判定とスタイル定義 ---
         const depDelayVal = parseInt(record.depDelay) || 0;
         const arrDelayVal = parseInt(record.arrDelay) || 0;
-
-        // 通常表示用のスタイル（1以上なら赤文字）
         const depDelayStyle = depDelayVal >= 1 ? 'color: #e74c3c; font-weight: bold;' : '';
         const arrDelayStyle = arrDelayVal >= 1 ? 'color: #e74c3c; font-weight: bold;' : '';
-
-        // 編集モード（input）用のスタイル（1以上なら薄い赤背景）
         const depInputStyle = depDelayVal >= 1 ? 'background-color: #fdf2f2; color: #e74c3c; font-weight: bold;' : '';
         const arrInputStyle = arrDelayVal >= 1 ? 'background-color: #fdf2f2; color: #e74c3c; font-weight: bold;' : '';
-        // ----------------------------------------
 
         if (editingIndex === index) {
             tr.innerHTML = `
@@ -135,6 +128,10 @@ function bindActionButtons() {
             
             const targetDate = header.getAttribute('data-date');
             collapsedDates[targetDate] = !collapsedDates[targetDate];
+            
+            // 【反映】開閉状態をlocalStorageに保存
+            localStorage.setItem('collapsedDates', JSON.stringify(collapsedDates));
+            
             renderTable();
         });
     });
@@ -188,6 +185,8 @@ function deleteDateRecords(targetDate) {
         
         if (collapsedDates[targetDate] !== undefined) {
             delete collapsedDates[targetDate];
+            // 【反映】削除後の開閉状態を保存
+            localStorage.setItem('collapsedDates', JSON.stringify(collapsedDates));
         }
         
         renderTable();
@@ -371,29 +370,18 @@ renderTable();
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        // 1. クエリパラメータ（?v=...）を削除し、純粋な 'sw.js' で登録する
-        // ※これが無限ループの最大の原因になるため修正します
         navigator.serviceWorker.register('sw.js').then(reg => {
-            
-            // 定期的に新しいService Workerがないかチェック（1時間ごとなど、必要に応じて）
-            // reg.update(); 
-
-            // 待機中の新しいService Workerがあるか監視
             reg.addEventListener('updatefound', () => {
                 const newWorker = reg.installing;
                 if (newWorker == null) return;
-
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed') {
                         if (navigator.serviceWorker.controller) {
-                            // すでにセッション内で確認ダイアログを出したかチェック（二重ポップアップ防止）
                             if (!sessionStorage.getItem('pwa_update_prompted')) {
                                 sessionStorage.setItem('pwa_update_prompted', 'true');
-                                
                                 if (confirm('新しいバージョンが利用可能です。アップデートして最新の状態にしますか？')) {
                                     newWorker.postMessage({ type: 'SKIP_WAITING' });
                                 } else {
-                                    // 「キャンセル」された場合はセッションが切れるまで再度聞かない
                                     sessionStorage.removeItem('pwa_update_prompted');
                                 }
                             }
@@ -401,30 +389,23 @@ if ('serviceWorker' in navigator) {
                     }
                 });
             });
-            
         }).catch(err => {
             console.error('Service Workerの登録に失敗しました:', err);
         });
     });
 
-    // 2. リロードの二重実行を徹底的に防ぐフラグ管理
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
-        
-        // アップデートフラグをクリアしてからリロード
         sessionStorage.removeItem('pwa_update_prompted');
         window.location.reload();
     });
 }
 
-
-// --- ダークモード管理 ---
 const themeToggle = document.getElementById('themeToggle');
 const currentTheme = localStorage.getItem('theme') || 'light';
 
-// 初期テーマの適用
 if (currentTheme === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
     themeToggle.textContent = '☀️';
