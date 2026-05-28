@@ -1,4 +1,4 @@
-const CACHE_NAME = 'train-memo-v1.1'; // ← アップデート時はここを毎回変更する（例: v1.0 -> v1.1）
+const CACHE_NAME = 'train-memo-v1.2'; // ← アップデート時はここを毎回変更する（例: v1.0 -> v1.1）
 const ASSETS = [
     './',
     './index.html',
