@@ -79,13 +79,26 @@ function renderTable() {
             tr.classList.add('hidden-row');
         }
 
+        // --- 遅延データの数値判定とスタイル定義 ---
+        const depDelayVal = parseInt(record.depDelay) || 0;
+        const arrDelayVal = parseInt(record.arrDelay) || 0;
+
+        // 通常表示用のスタイル（1以上なら赤文字）
+        const depDelayStyle = depDelayVal >= 1 ? 'color: #e74c3c; font-weight: bold;' : '';
+        const arrDelayStyle = arrDelayVal >= 1 ? 'color: #e74c3c; font-weight: bold;' : '';
+
+        // 編集モード（input）用のスタイル（1以上なら薄い赤背景）
+        const depInputStyle = depDelayVal >= 1 ? 'background-color: #fdf2f2; color: #e74c3c; font-weight: bold;' : '';
+        const arrInputStyle = arrDelayVal >= 1 ? 'background-color: #fdf2f2; color: #e74c3c; font-weight: bold;' : '';
+        // ----------------------------------------
+
         if (editingIndex === index) {
             tr.innerHTML = `
                 <td><input type="text" id="edit_depStation" value="${escapeHTML(record.depStation)}"></td>
                 <td><input type="time" id="edit_time" value="${escapeHTML(record.time)}"></td>
                 <td><input type="text" id="edit_arrStation" value="${escapeHTML(record.arrStation)}"></td>
-                <td><input type="number" id="edit_depDelay" value="${record.depDelay || 0}" min="0" style="width:50px;"></td>
-                <td><input type="number" id="edit_arrDelay" value="${record.arrDelay || 0}" min="0" style="width:50px;"></td>
+                <td><input type="number" id="edit_depDelay" value="${depDelayVal}" min="0" style="width:50px; ${depInputStyle}"></td>
+                <td><input type="number" id="edit_arrDelay" value="${arrDelayVal}" min="0" style="width:50px; ${arrInputStyle}"></td>
                 <td><input type="text" id="edit_trainNum" value="${escapeHTML(record.trainNum)}" style="width:70px;"></td>
                 <td><input type="text" id="edit_memo" value="${escapeHTML(record.memo)}"></td>
                 <td>
@@ -98,8 +111,8 @@ function renderTable() {
                 <td>${escapeHTML(record.depStation)}</td>
                 <td>${escapeHTML(record.time)}</td>
                 <td>${escapeHTML(record.arrStation)}</td>
-                <td>${record.depDelay || 0}</td>
-                <td>${record.arrDelay || 0}</td>
+                <td style="${depDelayStyle}">${depDelayVal}</td>
+                <td style="${arrDelayStyle}">${arrDelayVal}</td>
                 <td>${escapeHTML(record.trainNum)}</td>
                 <td>${escapeHTML(record.memo)}</td>
                 <td>
@@ -358,6 +371,35 @@ renderTable();
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js');
+        // GitHub Pagesのブラウザキャッシュ対策のため、クエリパラメータを付与して登録
+        navigator.serviceWorker.register(`sw.js?v=${Date.now()}`).then(reg => {
+            
+            // 待機中の新しいService Workerがあるか監視
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                
+                newWorker.addEventListener('statechange', () => {
+                    // 新しいService Workerのインストールが完了し、すでに古いのが存在する場合
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        if (confirm('新しいバージョンが利用可能です。アップデートして最新の状態にしますか？')) {
+                            // sw.jsへ「待機をやめて即時有効化しろ」とメッセージを送る
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                        }
+                    }
+                });
+            });
+            
+        }).catch(err => {
+            console.error('Service Workerの登録に失敗しました:', err);
+        });
+    });
+
+    // 新しいService Workerが有効（コントローラーが切り替わった）になったら画面をリロード
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+            window.location.reload();
+            refreshing = true;
+        }
     });
 }
