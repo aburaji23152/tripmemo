@@ -371,19 +371,32 @@ renderTable();
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        // GitHub Pagesのブラウザキャッシュ対策のため、クエリパラメータを付与して登録
-        navigator.serviceWorker.register(`sw.js?v=${Date.now()}`).then(reg => {
+        // 1. クエリパラメータ（?v=...）を削除し、純粋な 'sw.js' で登録する
+        // ※これが無限ループの最大の原因になるため修正します
+        navigator.serviceWorker.register('sw.js').then(reg => {
             
+            // 定期的に新しいService Workerがないかチェック（1時間ごとなど、必要に応じて）
+            // reg.update(); 
+
             // 待機中の新しいService Workerがあるか監視
             reg.addEventListener('updatefound', () => {
                 const newWorker = reg.installing;
-                
+                if (newWorker == null) return;
+
                 newWorker.addEventListener('statechange', () => {
-                    // 新しいService Workerのインストールが完了し、すでに古いのが存在する場合
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        if (confirm('新しいバージョンが利用可能です。アップデートして最新の状態にしますか？')) {
-                            // sw.jsへ「待機をやめて即時有効化しろ」とメッセージを送る
-                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    if (newWorker.state === 'installed') {
+                        if (navigator.serviceWorker.controller) {
+                            // すでにセッション内で確認ダイアログを出したかチェック（二重ポップアップ防止）
+                            if (!sessionStorage.getItem('pwa_update_prompted')) {
+                                sessionStorage.setItem('pwa_update_prompted', 'true');
+                                
+                                if (confirm('新しいバージョンが利用可能です。アップデートして最新の状態にしますか？')) {
+                                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                } else {
+                                    // 「キャンセル」された場合はセッションが切れるまで再度聞かない
+                                    sessionStorage.removeItem('pwa_update_prompted');
+                                }
+                            }
                         }
                     }
                 });
@@ -394,12 +407,14 @@ if ('serviceWorker' in navigator) {
         });
     });
 
-    // 新しいService Workerが有効（コントローラーが切り替わった）になったら画面をリロード
+    // 2. リロードの二重実行を徹底的に防ぐフラグ管理
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-            window.location.reload();
-            refreshing = true;
-        }
+        if (refreshing) return;
+        refreshing = true;
+        
+        // アップデートフラグをクリアしてからリロード
+        sessionStorage.removeItem('pwa_update_prompted');
+        window.location.reload();
     });
 }
