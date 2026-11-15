@@ -513,10 +513,34 @@ themeToggle.addEventListener('click', () => {
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
 
-// Service Worker の登録（PWA対応）
+// Service Worker の登録と更新検知（PWA対応）
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .catch(err => console.error('Service Worker 登録失敗:', err));
+        navigator.serviceWorker.register('./sw.js').then((registration) => {
+            // すでに登録されているSWの更新をチェック
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                if (newWorker) {
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // 新しいバージョンがインストール完了したとき
+                            showToast('アプリの新しいバージョンが見つかりました。更新します...', 'success');
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1500);
+                        }
+                    });
+                }
+            });
+        }).catch(err => console.error('Service Worker 登録失敗:', err));
+
+        // ページが新しくコントローラーに制御されたときの処理（リロード時など）
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+                refreshing = true;
+                window.location.reload();
+            }
+        });
     });
 }
