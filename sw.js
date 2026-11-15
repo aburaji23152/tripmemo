@@ -1,11 +1,11 @@
-const CACHE_NAME = 'train-memo-v1.5.3';
+const CACHE_NAME = 'train-memo-v1.6.0';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './script.js',
   './manifest.json',
-  './icon.png',
+  './icon.svg',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/lucide@latest'
 ];
@@ -17,6 +17,8 @@ self.addEventListener('install', (event) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
+  // すぐにアクティブ化させる場合
+  self.skipWaiting();
 });
 
 // 古いキャッシュの削除
@@ -32,6 +34,8 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  // コントローラーの制御をすぐに移行
+  self.clients.claim();
 });
 
 // リクエスト時にキャッシュがあれば返し、なければネットワークから取得
