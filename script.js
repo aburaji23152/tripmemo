@@ -1,14 +1,48 @@
 // データの読み込みと初期化（localStorageから取得）
 const tableBody = document.getElementById('tableBody');
 let records = JSON.parse(localStorage.getItem('trainRecords')) || [];
-
-// 【反映】折りたたみ状態をlocalStorageから読み込む
 let collapsedDates = JSON.parse(localStorage.getItem('collapsedDates')) || {};
-
-// 編集中の行のインデックス（-1は編集モードなし）
 let editingIndex = -1;
 
-// 今日のおおよその日付（ローカルタイム）をフォームの初期値にする
+// トースト通知
+let toastTimer;
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2800);
+}
+
+// カスタム確認ダイアログ
+function showConfirm(title, message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalMessage').textContent = message;
+        modal.classList.remove('hidden');
+
+        const cancelBtn = document.getElementById('modalCancelBtn');
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+
+        const cleanup = (result) => {
+            modal.classList.add('hidden');
+            cancelBtn.removeEventListener('click', onCancel);
+            confirmBtn.removeEventListener('click', onConfirm);
+            resolve(result);
+        };
+
+        const onCancel = () => cleanup(false);
+        const onConfirm = () => cleanup(true);
+
+        cancelBtn.addEventListener('click', onCancel);
+        confirmBtn.addEventListener('click', onConfirm);
+    });
+}
+
+// 今日の日付（ローカルタイム）をフォームの初期値にする
 function setTodayDate() {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -17,7 +51,16 @@ function setTodayDate() {
     document.getElementById('date').value = `${yyyy}-${mm}-${dd}`;
 }
 
-// データを【開閉状態】＞【日付順】＞【時刻順】にソートする関数
+// 日付フォーマット整形
+function formatDateLabel(dateStr) {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    return `${parts[0]}年${Number(parts[1])}月${Number(parts[2])}日 (${weekdays[d.getDay()]})`;
+}
+
+// データを【開閉状態】＞【日付順(新しい順)】＞【時刻順】にソートする関数
 function sortRecords() {
     records.sort((a, b) => {
         const aCollapsed = collapsedDates[a.date] || false;
@@ -37,7 +80,8 @@ function sortRecords() {
 function renderTable() {
     tableBody.innerHTML = '';
     if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#7f8c8d;">記録がありません</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="8" class="empty-state">まだ乗車記録がありません。上のフォームから追加してください。</td></tr>`;
+        lucide.createIcons();
         return;
     }
 
@@ -45,78 +89,103 @@ function renderTable() {
         sortRecords();
     }
 
+    // 日付ごとの件数をカウント
+    const dateCounts = records.reduce((acc, rec) => {
+        acc[rec.date] = (acc[rec.date] || 0) + 1;
+        return acc;
+    }, {});
+
     let currentScaleDate = '';
 
     records.forEach((record, index) => {
         // 日付の見出し行
         if (record.date !== currentScaleDate) {
             currentScaleDate = record.date;
-            
-            const dateObj = new Date(record.date);
-            const formattedDate = isNaN(dateObj.getTime()) ? record.date : `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日`;
-
+            const formattedDate = formatDateLabel(record.date);
             const isCollapsed = collapsedDates[record.date] || false;
-            const toggleIcon = isCollapsed ? '▶' : '▼';
 
             const dateRow = document.createElement('tr');
-            dateRow.className = 'date-header-row';
+            dateRow.className = `date-header-row ${isCollapsed ? 'collapsed' : ''}`;
             dateRow.setAttribute('data-date', record.date);
             dateRow.innerHTML = `
-                <td colspan="8" style="background-color: ${isCollapsed ? '#f2f4f4' : '#ecf0f1'}; color: ${isCollapsed ? '#7f8c8d' : '#2c3e50'}; font-weight: bold; text-align: left; padding: 10px 12px; font-size: 0.95rem; cursor: pointer; position: relative;">
-                    <span style="display: inline-block; padding: 4px 0;">${toggleIcon} 🗓️ ${formattedDate} ${isCollapsed ? '<span style="font-weight:normal; font-size:11px; margin-left:10px;">(隠して下へ移動中)</span>' : ''}</span>
-                    <button class="delete-date-btn" data-date="${record.date}" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background-color: #e74c3c; color: white; border: none; padding: 4px 8px; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: normal; width: auto; margin: 0;">
-                        🗑️ この日を削除
-                    </button>
+                <td colspan="8">
+                    <div class="date-header-content">
+                        <div class="date-title-group">
+                            <i data-lucide="chevron-down" class="chevron-icon"></i>
+                            <span>${formattedDate}</span>
+                            <span class="count-pill">${dateCounts[record.date]}本</span>
+                            ${isCollapsed ? '<span class="collapsed-note">（折りたたみ中）</span>' : ''}
+                        </div>
+                        <button class="mini-btn mini-delete delete-date-btn" data-date="${record.date}" title="この日の記録をすべて削除">
+                            <i data-lucide="trash-2"></i>
+                            <span>この日を削除</span>
+                        </button>
+                    </div>
                 </td>
             `;
             tableBody.appendChild(dateRow);
         }
 
         const tr = document.createElement('tr');
-        
+        tr.className = 'record-row';
         if (collapsedDates[record.date]) {
             tr.classList.add('hidden-row');
         }
 
         const depDelayVal = parseInt(record.depDelay) || 0;
         const arrDelayVal = parseInt(record.arrDelay) || 0;
-        const depDelayStyle = depDelayVal >= 1 ? 'color: #e74c3c; font-weight: bold;' : '';
-        const arrDelayStyle = arrDelayVal >= 1 ? 'color: #e74c3c; font-weight: bold;' : '';
-        const depInputStyle = depDelayVal >= 1 ? 'background-color: #fdf2f2; color: #e74c3c; font-weight: bold;' : '';
-        const arrInputStyle = arrDelayVal >= 1 ? 'background-color: #fdf2f2; color: #e74c3c; font-weight: bold;' : '';
 
         if (editingIndex === index) {
             tr.innerHTML = `
                 <td><input type="text" id="edit_depStation" value="${escapeHTML(record.depStation)}"></td>
                 <td><input type="time" id="edit_time" value="${escapeHTML(record.time)}"></td>
                 <td><input type="text" id="edit_arrStation" value="${escapeHTML(record.arrStation)}"></td>
-                <td><input type="number" id="edit_depDelay" value="${depDelayVal}" min="0" style="width:50px; ${depInputStyle}"></td>
-                <td><input type="number" id="edit_arrDelay" value="${arrDelayVal}" min="0" style="width:50px; ${arrInputStyle}"></td>
-                <td><input type="text" id="edit_trainNum" value="${escapeHTML(record.trainNum)}" style="width:70px;"></td>
+                <td><input type="number" id="edit_depDelay" value="${depDelayVal}" min="0" style="width:64px;"></td>
+                <td><input type="number" id="edit_arrDelay" value="${arrDelayVal}" min="0" style="width:64px;"></td>
+                <td><input type="text" id="edit_trainNum" value="${escapeHTML(record.trainNum)}" style="width:84px;"></td>
                 <td><input type="text" id="edit_memo" value="${escapeHTML(record.memo)}"></td>
                 <td>
-                    <button class="save-btn" data-index="${index}" style="background-color:#2ecc71; padding:4px 8px; font-size:12px; width:auto; margin:2px;">保存</button>
-                    <button class="cancel-btn" style="background-color:#95a5a6; padding:4px 8px; font-size:12px; width:auto; margin:2px;">中止</button>
+                    <div class="row-actions">
+                        <button class="mini-btn mini-save save-btn" data-index="${index}">保存</button>
+                        <button class="mini-btn mini-cancel cancel-btn">中止</button>
+                    </div>
                 </td>
             `;
         } else {
+            const depBadge = depDelayVal >= 1
+                ? `<span class="delay-badge delayed">+${depDelayVal}</span>`
+                : `<span class="delay-badge ontime">0</span>`;
+            const arrBadge = arrDelayVal >= 1
+                ? `<span class="delay-badge delayed">+${arrDelayVal}</span>`
+                : `<span class="delay-badge ontime">0</span>`;
+            const trainDisplay = record.trainNum
+                ? `<span class="train-badge">${escapeHTML(record.trainNum)}</span>`
+                : `<span style="color:var(--text-muted)">-</span>`;
+
             tr.innerHTML = `
-                <td>${escapeHTML(record.depStation)}</td>
-                <td>${escapeHTML(record.time)}</td>
-                <td>${escapeHTML(record.arrStation)}</td>
-                <td style="${depDelayStyle}">${depDelayVal}</td>
-                <td style="${arrDelayStyle}">${arrDelayVal}</td>
-                <td>${escapeHTML(record.trainNum)}</td>
+                <td class="station-cell">${escapeHTML(record.depStation)}</td>
+                <td class="time-cell">${escapeHTML(record.time)}</td>
+                <td class="station-cell">${escapeHTML(record.arrStation)}</td>
+                <td class="text-center">${depBadge}</td>
+                <td class="text-center">${arrBadge}</td>
+                <td>${trainDisplay}</td>
                 <td>${escapeHTML(record.memo)}</td>
                 <td>
-                    <button class="edit-btn" data-index="${index}" style="background-color:#f39c12; padding:4px 8px; font-size:12px; width:auto; margin:2px;">編集</button>
-                    <button class="delete-btn" data-index="${index}" style="background-color:#e74c3c; padding:4px 8px; font-size:12px; width:auto; margin:2px;">削除</button>
+                    <div class="row-actions">
+                        <button class="mini-btn mini-edit edit-btn" data-index="${index}" title="編集">
+                            <i data-lucide="pencil"></i>
+                        </button>
+                        <button class="mini-btn mini-delete delete-btn" data-index="${index}" title="削除">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
                 </td>
             `;
         }
         tableBody.appendChild(tr);
     });
 
+    lucide.createIcons();
     bindActionButtons();
 }
 
@@ -124,14 +193,10 @@ function renderTable() {
 function bindActionButtons() {
     document.querySelectorAll('.date-header-row').forEach(header => {
         header.addEventListener('click', (e) => {
-            if (e.target.classList.contains('delete-date-btn')) return;
-            
+            if (e.target.closest('.delete-date-btn')) return;
             const targetDate = header.getAttribute('data-date');
             collapsedDates[targetDate] = !collapsedDates[targetDate];
-            
-            // 【反映】開閉状態をlocalStorageに保存
             localStorage.setItem('collapsedDates', JSON.stringify(collapsedDates));
-            
             renderTable();
         });
     });
@@ -175,36 +240,36 @@ function bindActionButtons() {
     });
 }
 
-function deleteDateRecords(targetDate) {
-    const dateObj = new Date(targetDate);
-    const formattedDate = isNaN(dateObj.getTime()) ? targetDate : `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日`;
+async function deleteDateRecords(targetDate) {
+    const formattedDate = formatDateLabel(targetDate);
+    const ok = await showConfirm(
+        '日付の一括削除',
+        `${formattedDate} の記録をすべて削除しますか？\nこの操作は元に戻せません。`
+    );
 
-    if (confirm(`⚠️ 警告 ⚠️\n\n${formattedDate} の記録を「すべて」削除しますか？\nこの操作は元に戻せません。`)) {
+    if (ok) {
         records = records.filter(record => record.date !== targetDate);
         localStorage.setItem('trainRecords', JSON.stringify(records));
-        
         if (collapsedDates[targetDate] !== undefined) {
             delete collapsedDates[targetDate];
-            // 【反映】削除後の開閉状態を保存
             localStorage.setItem('collapsedDates', JSON.stringify(collapsedDates));
         }
-        
         renderTable();
-        alert(`${formattedDate} の記録を一括削除しました。`);
+        showToast(`${formattedDate} の記録を削除しました`);
     }
 }
 
 function saveEdit(index) {
-    const depStation = document.getElementById('edit_depStation').value;
+    const depStation = document.getElementById('edit_depStation').value.trim();
     const time = document.getElementById('edit_time').value;
-    const arrStation = document.getElementById('edit_arrStation').value;
+    const arrStation = document.getElementById('edit_arrStation').value.trim();
     const depDelay = document.getElementById('edit_depDelay').value;
     const arrDelay = document.getElementById('edit_arrDelay').value;
-    const trainNum = document.getElementById('edit_trainNum').value;
-    const memo = document.getElementById('edit_memo').value;
+    const trainNum = document.getElementById('edit_trainNum').value.trim();
+    const memo = document.getElementById('edit_memo').value.trim();
 
     if (!depStation || !time || !arrStation) {
-        alert('乗車駅、時刻、下車駅は必須入力です。');
+        showToast('乗車駅・時刻・下車駅は必須です');
         return;
     }
 
@@ -216,27 +281,28 @@ function saveEdit(index) {
     localStorage.setItem('trainRecords', JSON.stringify(records));
     editingIndex = -1;
     renderTable();
+    showToast('記録を更新しました');
 }
 
 function escapeHTML(str) {
     if (!str) return '';
-    return str.replace(/[&<>"']/g, match => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    return String(str).replace(/[&<>"']/g, match => ({
+        '&': '&', '<': '<', '>': '>', '"': '"', "'": '''
     }[match]));
 }
 
 document.getElementById('addBtn').addEventListener('click', () => {
     const date = document.getElementById('date').value;
-    const depStation = document.getElementById('depStation').value;
+    const depStation = document.getElementById('depStation').value.trim();
     const time = document.getElementById('time').value;
-    const arrStation = document.getElementById('arrStation').value;
+    const arrStation = document.getElementById('arrStation').value.trim();
     const depDelay = document.getElementById('depDelay').value;
     const arrDelay = document.getElementById('arrDelay').value;
-    const trainNum = document.getElementById('trainNum').value;
-    const memo = document.getElementById('memo').value;
+    const trainNum = document.getElementById('trainNum').value.trim();
+    const memo = document.getElementById('memo').value.trim();
 
     if (!date || !depStation || !time || !arrStation) {
-        alert('日付、乗車駅、時刻、下車駅は必須入力です。');
+        showToast('日付・乗車駅・時刻・下車駅を入力してください');
         return;
     }
 
@@ -246,13 +312,20 @@ document.getElementById('addBtn').addEventListener('click', () => {
     
     renderTable();
     clearForm();
+    showToast('乗車記録を追加しました');
 });
 
-function deleteRecord(index) {
-    if (confirm('この記録を削除しますか？')) {
+async function deleteRecord(index) {
+    const target = records[index];
+    const ok = await showConfirm(
+        '記録の削除',
+        `${target.depStation} → ${target.arrStation}（${target.time}発）の記録を削除しますか？`
+    );
+    if (ok) {
         records.splice(index, 1);
         localStorage.setItem('trainRecords', JSON.stringify(records));
         renderTable();
+        showToast('記録を削除しました');
     }
 }
 
@@ -280,10 +353,11 @@ function downloadCSV(targetRecords, fileNameKeyword) {
     link.setAttribute('href', URL.createObjectURL(blob));
     link.setAttribute('download', `train_records_${fileNameKeyword}.csv`);
     link.click();
+    showToast('CSVをダウンロードしました');
 }
 
 document.getElementById('downloadBtn').addEventListener('click', () => {
-    if (records.length === 0) return alert('ダウンロードする記録がありません。');
+    if (records.length === 0) return showToast('ダウンロードする記録がありません');
     sortRecords();
     const now = new Date();
     const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
@@ -292,10 +366,10 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
 
 document.getElementById('downloadDateBtn').addEventListener('click', () => {
     const selectedDate = document.getElementById('date').value;
-    if (!selectedDate) return alert('日付を選択してください。');
+    if (!selectedDate) return showToast('日付を選択してください');
 
     const filteredRecords = records.filter(record => record.date === selectedDate);
-    if (filteredRecords.length === 0) return alert(`${selectedDate} の記録はありません。`);
+    if (filteredRecords.length === 0) return showToast(`${selectedDate} の記録はありません`);
 
     filteredRecords.sort((a, b) => a.time.localeCompare(b.time));
     downloadCSV(filteredRecords, selectedDate.replace(/-/g, ''));
@@ -334,7 +408,9 @@ document.getElementById('uploadFile').addEventListener('change', (e) => {
         if (importCount > 0) {
             localStorage.setItem('trainRecords', JSON.stringify(records));
             renderTable();
-            alert(`${importCount}件の記録をインポートしました！`);
+            showToast(`${importCount}件の記録をインポートしました`);
+        } else {
+            showToast('有効なデータが見つかりませんでした');
         }
         document.getElementById('uploadFile').value = '';
     };
@@ -342,7 +418,9 @@ document.getElementById('uploadFile').addEventListener('change', (e) => {
 });
 
 function parseCSVLine(line) {
-    const result = []; let current = ''; let inQuotes = false;
+    const result = [];
+    let current = '';
+    let inQuotes = false;
     for (let i = 0; i < line.length; i++) {
         const char = line[i];
         if (char === '"') {
@@ -351,7 +429,8 @@ function parseCSVLine(line) {
         } else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
         else { current += char; }
     }
-    result.push(current); return result;
+    result.push(current);
+    return result;
 }
 
 function clearForm() {
@@ -365,9 +444,7 @@ function clearForm() {
     document.getElementById('memo').value = '';
 }
 
-setTodayDate();
-renderTable();
-
+// Service Worker 登録（PWA対応）
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').then(reg => {
@@ -403,23 +480,26 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// テーマ切り替え
 const themeToggle = document.getElementById('themeToggle');
 const currentTheme = localStorage.getItem('theme') || 'light';
 
-if (currentTheme === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    themeToggle.textContent = '☀️';
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const iconName = theme === 'dark' ? 'sun' : 'moon';
+    themeToggle.innerHTML = `<i data-lucide="${iconName}"></i>`;
+    lucide.createIcons();
 }
 
+applyTheme(currentTheme);
+
 themeToggle.addEventListener('click', () => {
-    let theme = document.documentElement.getAttribute('data-theme');
-    if (theme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'light');
-        themeToggle.textContent = '🌙';
-        localStorage.setItem('theme', 'light');
-    } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        themeToggle.textContent = '☀️';
-        localStorage.setItem('theme', 'dark');
-    }
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const nextTheme = isDark ? 'light' : 'dark';
+    localStorage.setItem('theme', nextTheme);
+    applyTheme(nextTheme);
 });
+
+// 初期化実行
+setTodayDate();
+renderTable();
