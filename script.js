@@ -1,34 +1,69 @@
+// アイコン初期化
+lucide.createIcons();
+
 // データの読み込みと初期化（localStorageから取得）
 const tableBody = document.getElementById('tableBody');
+const recordCountBadge = document.getElementById('recordCountBadge');
 let records = JSON.parse(localStorage.getItem('trainRecords')) || [];
+
+// 折りたたみ状態をlocalStorageから読み込む
 let collapsedDates = JSON.parse(localStorage.getItem('collapsedDates')) || {};
+
+// 編集中の行のインデックス（-1は編集モードなし）
 let editingIndex = -1;
 
-// トースト通知
-let toastTimer;
-function showToast(message) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-        toast.classList.remove('show');
-    }, 2800);
+// --- トースト通知機能（alertの代替） ---
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    
+    const styles = {
+        success: 'bg-slate-900 dark:bg-emerald-950 text-white border-emerald-500/40',
+        error: 'bg-rose-600 text-white border-rose-400/40',
+        info: 'bg-slate-800 text-white border-slate-700'
+    };
+    const icons = {
+        success: 'check-circle',
+        error: 'alert-circle',
+        info: 'info'
+    };
+
+    toast.className = `toast-enter flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium ${styles[type] || styles.info}`;
+    toast.innerHTML = `
+        <i data-lucide="${icons[type] || icons.info}" class="w-4 h-4 shrink-0 ${type === 'success' ? 'text-emerald-400' : ''}"></i>
+        <span>${escapeHTML(message)}</span>
+    `;
+    container.appendChild(toast);
+    lucide.createIcons({ root: toast });
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        toast.style.transition = 'all 0.25s ease';
+        setTimeout(() => toast.remove(), 250);
+    }, 3000);
 }
 
-// カスタム確認ダイアログ
-function showConfirm(title, message) {
+// --- カスタム確認ダイアログ（confirmの代替） ---
+function showConfirm(title, message, confirmLabel = '削除する', confirmClass = 'bg-rose-600 hover:bg-rose-700') {
     return new Promise((resolve) => {
         const modal = document.getElementById('confirmModal');
-        document.getElementById('modalTitle').textContent = title;
-        document.getElementById('modalMessage').textContent = message;
-        modal.classList.remove('hidden');
-
+        const titleEl = document.getElementById('modalTitle');
+        const msgEl = document.getElementById('modalMessage');
         const cancelBtn = document.getElementById('modalCancelBtn');
         const confirmBtn = document.getElementById('modalConfirmBtn');
 
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        confirmBtn.textContent = confirmLabel;
+        confirmBtn.className = `px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-sm transition-colors cursor-pointer ${confirmClass}`;
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
         const cleanup = (result) => {
             modal.classList.add('hidden');
+            modal.classList.remove('flex');
             cancelBtn.removeEventListener('click', onCancel);
             confirmBtn.removeEventListener('click', onConfirm);
             resolve(result);
@@ -42,7 +77,7 @@ function showConfirm(title, message) {
     });
 }
 
-// 今日の日付（ローカルタイム）をフォームの初期値にする
+// 今日のおおよその日付（ローカルタイム）をフォームの初期値にする
 function setTodayDate() {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -51,16 +86,7 @@ function setTodayDate() {
     document.getElementById('date').value = `${yyyy}-${mm}-${dd}`;
 }
 
-// 日付フォーマット整形
-function formatDateLabel(dateStr) {
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-    return `${parts[0]}年${Number(parts[1])}月${Number(parts[2])}日 (${weekdays[d.getDay()]})`;
-}
-
-// データを【開閉状態】＞【日付順(新しい順)】＞【時刻順】にソートする関数
+// データを【開閉状態】＞【日付順】＞【時刻順】にソートする関数
 function sortRecords() {
     records.sort((a, b) => {
         const aCollapsed = collapsedDates[a.date] || false;
@@ -76,12 +102,31 @@ function sortRecords() {
     });
 }
 
+// 遅延バッジのHTML生成
+function formatDelayBadge(val) {
+    if (val >= 1) {
+        return `<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60">+${val}</span>`;
+    }
+    return `<span class="text-slate-400 dark:text-slate-500 text-xs">0</span>`;
+}
+
 // テーブルの描画処理
 function renderTable() {
     tableBody.innerHTML = '';
+    recordCountBadge.textContent = `${records.length}件`;
+
     if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="8" class="empty-state">まだ乗車記録がありません。上のフォームから追加してください。</td></tr>`;
-        lucide.createIcons();
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="py-12 px-4 text-center">
+                    <div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+                        <i data-lucide="train" class="w-10 h-10 mb-2 opacity-40"></i>
+                        <p class="text-sm font-medium">記録がありません</p>
+                        <p class="text-xs mt-1">上のフォームから新しい乗車記録を追加してください</p>
+                    </div>
+                </td>
+            </tr>`;
+        lucide.createIcons({ root: tableBody });
         return;
     }
 
@@ -89,35 +134,46 @@ function renderTable() {
         sortRecords();
     }
 
-    // 日付ごとの件数をカウント
-    const dateCounts = records.reduce((acc, rec) => {
-        acc[rec.date] = (acc[rec.date] || 0) + 1;
-        return acc;
-    }, {});
-
     let currentScaleDate = '';
 
     records.forEach((record, index) => {
-        // 日付の見出し行
+        // 日付の見出し行（アコーディオンバー）
         if (record.date !== currentScaleDate) {
             currentScaleDate = record.date;
-            const formattedDate = formatDateLabel(record.date);
+            
+            // タイムゾーンずれ防止のためYYYY-MM-DDを分割して整形
+            const parts = record.date.split('-');
+            const formattedDate = parts.length === 3 
+                ? `${parts[0]}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日`
+                : record.date;
+
+            // その日の件数をカウント
+            const dayCount = records.filter(r => r.date === record.date).length;
             const isCollapsed = collapsedDates[record.date] || false;
 
             const dateRow = document.createElement('tr');
-            dateRow.className = `date-header-row ${isCollapsed ? 'collapsed' : ''}`;
+            dateRow.className = 'date-header-row group select-none cursor-pointer transition-colors ' + 
+                (isCollapsed 
+                    ? 'bg-slate-100/80 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400' 
+                    : 'bg-indigo-50/70 dark:bg-indigo-950/30 text-indigo-950 dark:text-indigo-200');
             dateRow.setAttribute('data-date', record.date);
+            
             dateRow.innerHTML = `
-                <td colspan="8">
-                    <div class="date-header-content">
-                        <div class="date-title-group">
-                            <i data-lucide="chevron-down" class="chevron-icon"></i>
-                            <span>${formattedDate}</span>
-                            <span class="count-pill">${dateCounts[record.date]}本</span>
-                            ${isCollapsed ? '<span class="collapsed-note">（折りたたみ中）</span>' : ''}
+                <td colspan="8" class="py-2.5 px-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg flex items-center justify-center bg-white/80 dark:bg-slate-800 shadow-2xs transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}">
+                                <i data-lucide="chevron-right" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+                            </span>
+                            <i data-lucide="calendar" class="w-4 h-4 text-indigo-500 dark:text-indigo-400"></i>
+                            <span class="font-bold text-sm tracking-tight">${formattedDate}</span>
+                            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                ${dayCount}本
+                            </span>
+                            ${isCollapsed ? '<span class="text-[11px] text-slate-400 dark:text-slate-500 ml-1">(折りたたみ中・下部へ移動)</span>' : ''}
                         </div>
-                        <button class="mini-btn mini-delete delete-date-btn" data-date="${record.date}" title="この日の記録をすべて削除">
-                            <i data-lucide="trash-2"></i>
+                        <button class="delete-date-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-100/80 dark:hover:bg-rose-950/60 transition-colors cursor-pointer" data-date="${record.date}">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5 pointer-events-none"></i>
                             <span>この日を削除</span>
                         </button>
                     </div>
@@ -127,7 +183,8 @@ function renderTable() {
         }
 
         const tr = document.createElement('tr');
-        tr.className = 'record-row';
+        tr.className = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors';
+        
         if (collapsedDates[record.date]) {
             tr.classList.add('hidden-row');
         }
@@ -136,47 +193,40 @@ function renderTable() {
         const arrDelayVal = parseInt(record.arrDelay) || 0;
 
         if (editingIndex === index) {
+            tr.className = 'bg-indigo-50/40 dark:bg-indigo-950/20';
             tr.innerHTML = `
-                <td><input type="text" id="edit_depStation" value="${escapeHTML(record.depStation)}"></td>
-                <td><input type="time" id="edit_time" value="${escapeHTML(record.time)}"></td>
-                <td><input type="text" id="edit_arrStation" value="${escapeHTML(record.arrStation)}"></td>
-                <td><input type="number" id="edit_depDelay" value="${depDelayVal}" min="0" style="width:64px;"></td>
-                <td><input type="number" id="edit_arrDelay" value="${arrDelayVal}" min="0" style="width:64px;"></td>
-                <td><input type="text" id="edit_trainNum" value="${escapeHTML(record.trainNum)}" style="width:84px;"></td>
-                <td><input type="text" id="edit_memo" value="${escapeHTML(record.memo)}"></td>
-                <td>
-                    <div class="row-actions">
-                        <button class="mini-btn mini-save save-btn" data-index="${index}">保存</button>
-                        <button class="mini-btn mini-cancel cancel-btn">中止</button>
+                <td class="py-2.5 px-3"><input type="text" id="edit_depStation" value="${escapeHTML(record.depStation)}" class="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></td>
+                <td class="py-2.5 px-2"><input type="time" id="edit_time" value="${escapeHTML(record.time)}" class="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></td>
+                <td class="py-2.5 px-3"><input type="text" id="edit_arrStation" value="${escapeHTML(record.arrStation)}" class="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></td>
+                <td class="py-2.5 px-1.5"><input type="number" id="edit_depDelay" value="${depDelayVal}" min="0" class="w-14 px-1.5 py-1.5 text-xs text-center bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></td>
+                <td class="py-2.5 px-1.5"><input type="number" id="edit_arrDelay" value="${arrDelayVal}" min="0" class="w-14 px-1.5 py-1.5 text-xs text-center bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></td>
+                <td class="py-2.5 px-2"><input type="text" id="edit_trainNum" value="${escapeHTML(record.trainNum)}" class="w-24 px-2 py-1.5 text-xs text-center bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></td>
+                <td class="py-2.5 px-3"><input type="text" id="edit_memo" value="${escapeHTML(record.memo)}" class="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></td>
+                <td class="py-2.5 px-4 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1.5">
+                        <button class="save-btn px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors cursor-pointer" data-index="${index}">保存</button>
+                        <button class="cancel-btn px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors cursor-pointer">中止</button>
                     </div>
                 </td>
             `;
         } else {
-            const depBadge = depDelayVal >= 1
-                ? `<span class="delay-badge delayed">+${depDelayVal}</span>`
-                : `<span class="delay-badge ontime">0</span>`;
-            const arrBadge = arrDelayVal >= 1
-                ? `<span class="delay-badge delayed">+${arrDelayVal}</span>`
-                : `<span class="delay-badge ontime">0</span>`;
-            const trainDisplay = record.trainNum
-                ? `<span class="train-badge">${escapeHTML(record.trainNum)}</span>`
-                : `<span style="color:var(--text-muted)">-</span>`;
-
             tr.innerHTML = `
-                <td class="station-cell">${escapeHTML(record.depStation)}</td>
-                <td class="time-cell">${escapeHTML(record.time)}</td>
-                <td class="station-cell">${escapeHTML(record.arrStation)}</td>
-                <td class="text-center">${depBadge}</td>
-                <td class="text-center">${arrBadge}</td>
-                <td>${trainDisplay}</td>
-                <td>${escapeHTML(record.memo)}</td>
-                <td>
-                    <div class="row-actions">
-                        <button class="mini-btn mini-edit edit-btn" data-index="${index}" title="編集">
-                            <i data-lucide="pencil"></i>
+                <td class="py-3 px-4 font-semibold text-slate-800 dark:text-slate-100">${escapeHTML(record.depStation)}</td>
+                <td class="py-3 px-3 text-center font-mono text-xs font-medium text-slate-600 dark:text-slate-300">${escapeHTML(record.time)}</td>
+                <td class="py-3 px-4 font-semibold text-slate-800 dark:text-slate-100">${escapeHTML(record.arrStation)}</td>
+                <td class="py-3 px-2 text-center">${formatDelayBadge(depDelayVal)}</td>
+                <td class="py-3 px-2 text-center">${formatDelayBadge(arrDelayVal)}</td>
+                <td class="py-3 px-3 text-center">
+                    ${record.trainNum ? `<span class="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium">${escapeHTML(record.trainNum)}</span>` : '<span class="text-slate-300 dark:text-slate-600">-</span>'}
+                </td>
+                <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate" title="${escapeHTML(record.memo)}">${escapeHTML(record.memo) || '<span class="text-slate-300 dark:text-slate-600">-</span>'}</td>
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1">
+                        <button class="edit-btn p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:text-slate-400 dark:hover:text-amber-400 dark:hover:bg-amber-950/50 transition-colors cursor-pointer" data-index="${index}" title="編集">
+                            <i data-lucide="pencil" class="w-4 h-4 pointer-events-none"></i>
                         </button>
-                        <button class="mini-btn mini-delete delete-btn" data-index="${index}" title="削除">
-                            <i data-lucide="trash-2"></i>
+                        <button class="delete-btn p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-rose-950/50 transition-colors cursor-pointer" data-index="${index}" title="削除">
+                            <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
                         </button>
                     </div>
                 </td>
@@ -185,7 +235,7 @@ function renderTable() {
         tableBody.appendChild(tr);
     });
 
-    lucide.createIcons();
+    lucide.createIcons({ root: tableBody });
     bindActionButtons();
 }
 
@@ -194,8 +244,11 @@ function bindActionButtons() {
     document.querySelectorAll('.date-header-row').forEach(header => {
         header.addEventListener('click', (e) => {
             if (e.target.closest('.delete-date-btn')) return;
+            
             const targetDate = header.getAttribute('data-date');
             collapsedDates[targetDate] = !collapsedDates[targetDate];
+            
+            // 開閉状態をlocalStorageに保存
             localStorage.setItem('collapsedDates', JSON.stringify(collapsedDates));
             renderTable();
         });
@@ -241,21 +294,27 @@ function bindActionButtons() {
 }
 
 async function deleteDateRecords(targetDate) {
-    const formattedDate = formatDateLabel(targetDate);
-    const ok = await showConfirm(
-        '日付の一括削除',
-        `${formattedDate} の記録をすべて削除しますか？\nこの操作は元に戻せません。`
+    const parts = targetDate.split('-');
+    const formattedDate = parts.length === 3 
+        ? `${parts[0]}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日`
+        : targetDate;
+
+    const confirmed = await showConfirm(
+        '日別記録の一括削除',
+        `${formattedDate} の記録を「すべて」削除しますか？\nこの操作は元に戻せません。`
     );
 
-    if (ok) {
+    if (confirmed) {
         records = records.filter(record => record.date !== targetDate);
         localStorage.setItem('trainRecords', JSON.stringify(records));
+        
         if (collapsedDates[targetDate] !== undefined) {
             delete collapsedDates[targetDate];
             localStorage.setItem('collapsedDates', JSON.stringify(collapsedDates));
         }
+        
         renderTable();
-        showToast(`${formattedDate} の記録を削除しました`);
+        showToast(`${formattedDate} の記録を一括削除しました`, 'success');
     }
 }
 
@@ -269,7 +328,7 @@ function saveEdit(index) {
     const memo = document.getElementById('edit_memo').value.trim();
 
     if (!depStation || !time || !arrStation) {
-        showToast('乗車駅・時刻・下車駅は必須です');
+        showToast('乗車駅、時刻、下車駅は必須入力です', 'error');
         return;
     }
 
@@ -281,13 +340,13 @@ function saveEdit(index) {
     localStorage.setItem('trainRecords', JSON.stringify(records));
     editingIndex = -1;
     renderTable();
-    showToast('記録を更新しました');
+    showToast('記録を更新しました', 'success');
 }
 
 function escapeHTML(str) {
     if (!str) return '';
     return String(str).replace(/[&<>"']/g, match => ({
-        '&': '&', '<': '<', '>': '>', '"': '"', "'": '''
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[match]));
 }
 
@@ -296,13 +355,13 @@ document.getElementById('addBtn').addEventListener('click', () => {
     const depStation = document.getElementById('depStation').value.trim();
     const time = document.getElementById('time').value;
     const arrStation = document.getElementById('arrStation').value.trim();
-    const depDelay = document.getElementById('depDelay').value;
-    const arrDelay = document.getElementById('arrDelay').value;
+    const depDelay = document.getElementById('depDelay').value || '0';
+    const arrDelay = document.getElementById('arrDelay').value || '0';
     const trainNum = document.getElementById('trainNum').value.trim();
     const memo = document.getElementById('memo').value.trim();
 
     if (!date || !depStation || !time || !arrStation) {
-        showToast('日付・乗車駅・時刻・下車駅を入力してください');
+        showToast('日付、乗車駅、時刻、下車駅は必須入力です', 'error');
         return;
     }
 
@@ -312,20 +371,16 @@ document.getElementById('addBtn').addEventListener('click', () => {
     
     renderTable();
     clearForm();
-    showToast('乗車記録を追加しました');
+    showToast('乗車記録を追加しました', 'success');
 });
 
 async function deleteRecord(index) {
-    const target = records[index];
-    const ok = await showConfirm(
-        '記録の削除',
-        `${target.depStation} → ${target.arrStation}（${target.time}発）の記録を削除しますか？`
-    );
-    if (ok) {
+    const confirmed = await showConfirm('記録の削除', 'この乗車記録を削除しますか？');
+    if (confirmed) {
         records.splice(index, 1);
         localStorage.setItem('trainRecords', JSON.stringify(records));
         renderTable();
-        showToast('記録を削除しました');
+        showToast('記録を削除しました', 'success');
     }
 }
 
@@ -335,9 +390,9 @@ function downloadCSV(targetRecords, fileNameKeyword) {
     targetRecords.forEach(record => {
         const row = [
             `"${record.date}"`,
-            `"${record.depStation.replace(/"/g, '""')}"`,
+            `"${(record.depStation || '').replace(/"/g, '""')}"`,
             `"${record.time}"`,
-            `"${record.arrStation.replace(/"/g, '""')}"`,
+            `"${(record.arrStation || '').replace(/"/g, '""')}"`,
             `"${record.depDelay || 0}"`,
             `"${record.arrDelay || 0}"`,
             `"${(record.trainNum || '').replace(/"/g, '""')}"`,
@@ -353,11 +408,11 @@ function downloadCSV(targetRecords, fileNameKeyword) {
     link.setAttribute('href', URL.createObjectURL(blob));
     link.setAttribute('download', `train_records_${fileNameKeyword}.csv`);
     link.click();
-    showToast('CSVをダウンロードしました');
+    showToast('CSVファイルをダウンロードしました', 'success');
 }
 
 document.getElementById('downloadBtn').addEventListener('click', () => {
-    if (records.length === 0) return showToast('ダウンロードする記録がありません');
+    if (records.length === 0) return showToast('ダウンロードする記録がありません', 'error');
     sortRecords();
     const now = new Date();
     const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
@@ -366,10 +421,10 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
 
 document.getElementById('downloadDateBtn').addEventListener('click', () => {
     const selectedDate = document.getElementById('date').value;
-    if (!selectedDate) return showToast('日付を選択してください');
+    if (!selectedDate) return showToast('日付を選択してください', 'error');
 
     const filteredRecords = records.filter(record => record.date === selectedDate);
-    if (filteredRecords.length === 0) return showToast(`${selectedDate} の記録はありません`);
+    if (filteredRecords.length === 0) return showToast(`${selectedDate} の記録はありません`, 'error');
 
     filteredRecords.sort((a, b) => a.time.localeCompare(b.time));
     downloadCSV(filteredRecords, selectedDate.replace(/-/g, ''));
@@ -408,9 +463,9 @@ document.getElementById('uploadFile').addEventListener('change', (e) => {
         if (importCount > 0) {
             localStorage.setItem('trainRecords', JSON.stringify(records));
             renderTable();
-            showToast(`${importCount}件の記録をインポートしました`);
+            showToast(`${importCount}件の記録をインポートしました！`, 'success');
         } else {
-            showToast('有効なデータが見つかりませんでした');
+            showToast('有効なデータが見つかりませんでした', 'error');
         }
         document.getElementById('uploadFile').value = '';
     };
@@ -418,9 +473,7 @@ document.getElementById('uploadFile').addEventListener('change', (e) => {
 });
 
 function parseCSVLine(line) {
-    const result = [];
-    let current = '';
-    let inQuotes = false;
+    const result = []; let current = ''; let inQuotes = false;
     for (let i = 0; i < line.length; i++) {
         const char = line[i];
         if (char === '"') {
@@ -429,12 +482,11 @@ function parseCSVLine(line) {
         } else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
         else { current += char; }
     }
-    result.push(current);
-    return result;
+    result.push(current); return result;
 }
 
 function clearForm() {
-    setTodayDate();
+    // 日付は連続入力しやすいよう維持し、駅名や時刻などをリセット
     document.getElementById('depStation').value = '';
     document.getElementById('time').value = '';
     document.getElementById('arrStation').value = '';
@@ -444,62 +496,19 @@ function clearForm() {
     document.getElementById('memo').value = '';
 }
 
-// Service Worker 登録（PWA対応）
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then(reg => {
-            reg.addEventListener('updatefound', () => {
-                const newWorker = reg.installing;
-                if (newWorker == null) return;
-                newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed') {
-                        if (navigator.serviceWorker.controller) {
-                            if (!sessionStorage.getItem('pwa_update_prompted')) {
-                                sessionStorage.setItem('pwa_update_prompted', 'true');
-                                if (confirm('新しいバージョンが利用可能です。アップデートして最新の状態にしますか？')) {
-                                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                } else {
-                                    sessionStorage.removeItem('pwa_update_prompted');
-                                }
-                            }
-                        }
-                    }
-                });
-            });
-        }).catch(err => {
-            console.error('Service Workerの登録に失敗しました:', err);
-        });
-    });
+// 初期表示セットアップ
+setTodayDate();
+renderTable();
 
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return;
-        refreshing = true;
-        sessionStorage.removeItem('pwa_update_prompted');
-        window.location.reload();
-    });
-}
-
-// テーマ切り替え
+// ダークモード切り替え（Tailwindのclass方式に対応）
 const themeToggle = document.getElementById('themeToggle');
 const currentTheme = localStorage.getItem('theme') || 'light';
 
-function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    const iconName = theme === 'dark' ? 'sun' : 'moon';
-    themeToggle.innerHTML = `<i data-lucide="${iconName}"></i>`;
-    lucide.createIcons();
+if (currentTheme === 'dark') {
+    document.documentElement.classList.add('dark');
 }
 
-applyTheme(currentTheme);
-
 themeToggle.addEventListener('click', () => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const nextTheme = isDark ? 'light' : 'dark';
-    localStorage.setItem('theme', nextTheme);
-    applyTheme(nextTheme);
+    const isDark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
-
-// 初期化実行
-setTodayDate();
-renderTable();
