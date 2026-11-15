@@ -1,24 +1,17 @@
 {
-  "name": "列車乗車記録メモ",
+  "name": "乗車記録メモ",
   "short_name": "列車メモ",
-  "description": "列車の乗車位置や時刻、遅延などを素早く記録できる旅行メモアプリです。",
+  "description": "列車の乗車履歴と遅延時間を記録するWebアプリ",
   "start_url": "./index.html",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#f4f7f6",
-  "theme_color": "#2c3e50",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
   "icons": [
     {
       "src": "./icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
