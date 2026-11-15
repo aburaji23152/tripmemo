@@ -512,3 +512,11 @@ themeToggle.addEventListener('click', () => {
     const isDark = document.documentElement.classList.toggle('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
+
+// Service Worker の登録（PWA対応）
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .catch(err => console.error('Service Worker 登録失敗:', err));
+    });
+}
